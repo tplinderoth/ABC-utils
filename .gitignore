@@ -1,0 +1,8 @@
+/Debug/
+.autotools
+.cproject
+.project
+.settings/
+*.o
+*.d
+ABC++utils
