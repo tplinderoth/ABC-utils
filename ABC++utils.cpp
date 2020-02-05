@@ -12,13 +12,6 @@
  * weighted euclidean distance: d(s, s_obs) = [ sum_i=1_m ( (s_i - s_obs,i)/delta_i )^2 ]^(1/2)
  * delta_i = empirical standard deviation of the simulated s_i values (Prangle 2017)
  *
- * 3) stats
- *
- *
- *TODO
- *
- *1) ignore ghost populations (don't parse any info from them) - simulate to check if in arp file
- *
  */
 
 #include "ABC++utils.h"
@@ -144,15 +137,17 @@ void statsInfo () {
 	<< std::setw(w) << std::left << "-fold" << "Folds the frequency spectrum, default: unfolded\n"
 	<< std::setw(w) << std::left << "-sfsprob" << "Convert SFS bin counts to probabilities, default: counts\n"
 	<< std::setw(w) << std::left << "-seqlen" << "An INT specifying the total sequence length to convert stats to per-site estimates\n"
-	<< std::setw(w) << std::left << "-noheader" << "Suppress writing the header to output, default: header is written\n";
+	<< std::setw(w) << std::left << "-noheader" << "Suppress writing the header to output, default: header is written\n"
+	<< std::setw(w) << std::left << "-verbose" << "Print all messages to screen\n";
 
 	std::cerr << "\nNOTES:\n"
-	<< "Input to arguments requiring lists should be space-delimited, e.g. -segsites 0 1 2 -doubleton 0,0 0,1 1,1\n"
-	<< "Output is written to Standard Output\n\n";
+	<< "* Input to arguments requiring lists should be space-delimited, e.g. -segsites 0 1 2 -doubleton 0,0 0,1 1,1\n"
+	<< "* Output is written to Standard Output\n"
+	<< "* Statistics are written in the same order as they are called in the argument list\n\n";
 }
 
 int statArgs (int argc, char** argv, std::string &arpname, std::vector< std::vector<int*> > &pops, std::vector<std::string> &popid, std::vector<int> &writeorder,
-		int &fold, int &sfsprob, unsigned int &seqlen, int &writeheader) {
+		int &fold, int &sfsprob, unsigned int &seqlen, int &writeheader, int &verbose) {
 
 	if (argc < 6 || (argc > 2 && strcmp(argv[2],"-help") == 0) || (argc > 2 && strcmp(argv[2], "-h") == 0)) {
 		statsInfo();
@@ -226,6 +221,9 @@ int statArgs (int argc, char** argv, std::string &arpname, std::vector< std::vec
 			}
 		} else if (strcmp(argv[i], "-noheader") == 0) {
 			writeheader = 0;
+			--i;
+		} else if (strcmp(argv[i], "-verbose") == 0) {
+			verbose = 1;
 			--i;
 		} else {
 			std::cerr << "Unknown argument " << argv[i] << "\n";
@@ -757,6 +755,7 @@ void writeStats (const std::vector< std::vector<int*> > &pops, const std::vector
 
 int doStats (int argc, char** argv) {
 	int rv = 0;
+	int verbose = 0; // controls amount of output to screen
 	int writeheader = 1;
 	int sfsprob = 0; // 1 = turn SFS categories into probabilities, 0 = leave SFS categories as counts
 	int fold = 0; // 1 = folded sfs, 0 = unfolded
@@ -782,7 +781,7 @@ int doStats (int argc, char** argv) {
 	std::vector<std::string> popid;
 	popid.reserve(50);
 
-	if ((rv = statArgs(argc, argv, arpname, pops, popid, printorder, fold, sfsprob, seqlen, writeheader))) {
+	if ((rv = statArgs(argc, argv, arpname, pops, popid, printorder, fold, sfsprob, seqlen, writeheader, verbose))) {
 		return rv;
 	}
 
@@ -877,6 +876,18 @@ int doStats (int argc, char** argv) {
 	// calculate SFS and doubleton counts
 	if (calcSFS(af, sfs, double_counts, seq.snpn())) {
 		return -1;
+	}
+
+	if (verbose) {
+		// print unfolded SFS to screen
+		for (unsigned int i = 0; i < sfs.size(); ++i) {
+			std::cerr << "population " << i << " SFS\n";
+			std::cerr << sfs[i][0];
+			for (unsigned int j = 1; j < sfs[i].size(); ++j) {
+				std::cerr << " " << sfs[i][j];
+			}
+			std::cerr << "\n";
+		}
 	}
 
 	// calculate number of segregating sites
