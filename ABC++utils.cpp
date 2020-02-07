@@ -127,6 +127,7 @@ void statsInfo () {
 
 	std::cerr << "\nARGUMENTS:\n\n"
 	<< std::setw(w) << std::left << "-arpfile" << "Name of Arlequin style DNA sequence file written by fastsimcoal2\n"
+	<< std::setw(w) << std::left << "-out" << "Name of output file, default: standard output\n"
 	<< std::setw(w) << std::left << "-segsites" << "Number segregating sites, takes list of population IDs\n"
 	<< std::setw(w) << std::left << "-sfs" << "SFS bins for a list of <number derived alleles,pop ID>\n"
 	<< std::setw(w) << std::left << "-pi" << "Average number of pairwise sequence differences, takes list of population IDs\n"
@@ -142,12 +143,11 @@ void statsInfo () {
 
 	std::cerr << "\nNOTES:\n"
 	<< "* Input to arguments requiring lists should be space-delimited, e.g. -segsites 0 1 2 -doubleton 0,0 0,1 1,1\n"
-	<< "* Output is written to Standard Output\n"
 	<< "* Statistics are written in the same order as they are called in the argument list\n\n";
 }
 
-int statArgs (int argc, char** argv, std::string &arpname, std::vector< std::vector<int*> > &pops, std::vector<std::string> &popid, std::vector<int> &writeorder,
-		int &fold, int &sfsprob, unsigned int &seqlen, int &writeheader, int &verbose) {
+int statArgs (int argc, char** argv, std::string &arpname, std::ofstream &outfstream, std::ostream &os, std::vector< std::vector<int*> > &pops, std::vector<std::string> &popid,
+		std::vector<int> &writeorder, int &fold, int &sfsprob, unsigned int &seqlen, int &writeheader, int &verbose) {
 
 	if (argc < 6 || (argc > 2 && strcmp(argv[2],"-help") == 0) || (argc > 2 && strcmp(argv[2], "-h") == 0)) {
 		statsInfo();
@@ -207,6 +207,12 @@ int statArgs (int argc, char** argv, std::string &arpname, std::vector< std::vec
 			writeorder.push_back(6);
 		} else if (strcmp(argv[i], "-arpfile") == 0) {
 			arpname = argv[i+1];
+		} else if (strcmp(argv[i], "-out") == 0) {
+			outfstream.open(argv[i+1]);
+			if (!outfstream) {
+				std::cerr << "Problem opening output file " << argv[i+1] << "\n";
+				return -1;
+			}
 		} else if (strcmp(argv[i], "-sfsprob") == 0) {
 			sfsprob = 1;
 			--i;
@@ -231,6 +237,10 @@ int statArgs (int argc, char** argv, std::string &arpname, std::vector< std::vec
 		}
 
 		i += 2;
+	}
+
+	if (outfstream.is_open()) {
+		os.rdbuf(outfstream.rdbuf());
 	}
 
 	return 0;
@@ -606,8 +616,8 @@ void globalFst (const std::vector< std::vector<AlleleFreq> > &af, const std::vec
 }
 
 
-void writeStats (const std::vector< std::vector<int*> > &pops, const std::vector<int> &printorder, int writeheader, const std::vector<int> &segsites, const std::vector<double> &pvar,
-		const std::vector<double> &sfsbin, const std::vector<double> &doubleprob, const std::vector<double> &thetaw,
+void writeStats (std::ostream &outstream, const std::vector< std::vector<int*> > &pops, const std::vector<int> &printorder, int writeheader, const std::vector<int> &segsites,
+		const std::vector<double> &pvar, const std::vector<double> &sfsbin, const std::vector<double> &doubleprob, const std::vector<double> &thetaw,
 		const std::vector<double> &pi, const std::vector<double> &tajimad, const std::vector<double> &fst) {
 
 	unsigned int j, k;
@@ -677,7 +687,7 @@ void writeStats (const std::vector< std::vector<int*> > &pops, const std::vector
 		if ((lastchar = header.find_last_not_of(whitespace)) != std::string::npos) {
 			header.erase(lastchar+1);
 		}
-		std::cout << header << "\n";
+		outstream << header << "\n";
 
 	}
 
@@ -750,7 +760,7 @@ void writeStats (const std::vector< std::vector<int*> > &pops, const std::vector
 	if ((lastchar = statstr.find_last_not_of(whitespace)) != std::string::npos) {
 		statstr.erase(lastchar+1);
 	}
-	std::cout << statstr << "\n";
+	outstream << statstr << "\n";
 }
 
 int doStats (int argc, char** argv) {
@@ -761,6 +771,8 @@ int doStats (int argc, char** argv) {
 	int fold = 0; // 1 = folded sfs, 0 = unfolded
 	unsigned int seqlen = 0; // sequence length for calculating per site statistics
 	std::string arpname;
+	std::ostream outstream(std::cout.rdbuf());
+	std::ofstream outfstream;
 
 	// container of what populations to calculate certain stats for
 	// 0 = probability shared doubleton allele
@@ -781,7 +793,7 @@ int doStats (int argc, char** argv) {
 	std::vector<std::string> popid;
 	popid.reserve(50);
 
-	if ((rv = statArgs(argc, argv, arpname, pops, popid, printorder, fold, sfsprob, seqlen, writeheader, verbose))) {
+	if ((rv = statArgs(argc, argv, arpname, outfstream, outstream, pops, popid, printorder, fold, sfsprob, seqlen, writeheader, verbose))) {
 		return rv;
 	}
 
@@ -962,7 +974,11 @@ int doStats (int argc, char** argv) {
 	}
 
 	// output stats
-	writeStats(pops, printorder, writeheader, segsites, pvar, sfsbin, doubleprob, theta_w, pi, tajimaD, fst);
+	writeStats(outstream, pops, printorder, writeheader, segsites, pvar, sfsbin, doubleprob, theta_w, pi, tajimaD, fst);
+
+	if (outfstream.is_open()) {
+		outfstream.close();
+	}
 
 	// free memory
 	for (int i=0; i<seq.popn(); ++i) {
